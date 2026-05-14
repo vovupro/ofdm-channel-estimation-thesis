@@ -119,15 +119,19 @@ for e in EXPS:
 
 # Vẽ BER
 STYLES = {
-    "LS":         ("blue",   "o", "--"),
-    "LMMSE":      ("orange", "s", "-."),
-    "ChannelNet": ("red",    "^", "-"),
+    "LS":         ("steelblue", "o", "--",  6, 1),
+    "ChannelNet": ("red",       "^", "-",   7, 2),
+    "LMMSE":      ("green",     "D", "-.",  9, 3),
 }
 for e in EXPS:
     fig, ax = plt.subplots(figsize=(6, 4))
-    for method, (color, marker, ls) in STYLES.items():
+    for method, (color, marker, ls, ms, zorder) in STYLES.items():
         bers = [all_ber[e["name"]][method][snr] for snr in SNR_RANGE]
-        ax.semilogy(SNR_RANGE, bers, color=color, marker=marker, linestyle=ls, label=method)
+        snr_plot = [s for s, b in zip(SNR_RANGE, bers) if b > 0]
+        ber_plot = [b for b in bers if b > 0]
+        ax.semilogy(snr_plot, ber_plot, color=color, marker=marker, linestyle=ls,
+                    markersize=ms, zorder=zorder, linewidth=1.8,
+                    markeredgecolor="white", markeredgewidth=0.5, label=method)
     ax.set_xlabel("SNR (dB)"); ax.set_ylabel("BER")
     ax.set_title(f"BER vs SNR — {e['name']}")
     ax.legend(); ax.grid(True, which="both", linestyle="--", alpha=0.4)
