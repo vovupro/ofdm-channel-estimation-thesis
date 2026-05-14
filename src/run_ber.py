@@ -1,5 +1,5 @@
 """
-Tính BER vs SNR cho tất cả experiment, rồi vẽ đồ thị.
+Tính BER vs SNR — ZF equalization + QPSK hard decision.
 Chạy sau khi train.py đã hoàn thành.
 """
 import sys, json
@@ -11,9 +11,10 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "cebed"))
 
+from sionna.channel import ApplyOFDMChannel
 from cebed.envs import OfdmEnv, EnvConfig
 from cebed.models import get_model_class
-from cebed.baselines import linear_ls_baseline
+from cebed.baselines import linear_ls_baseline, lmmse_baseline
 from cebed.utils import unflatten_last_dim
 from cebed.datasets.sionna import preprocess_inputs
 from cebed.datasets.utils import postprocess
@@ -45,6 +46,8 @@ CN_HPARAMS = dict(
     lr=0.001, int_type="bilinear", output_dim=[14, 72, 2],
 )
 
+apply_noiseless = ApplyOFDMChannel(add_awgn=False, dtype=tf.complex64)
+
 
 def make_env(e):
     cfg = EnvConfig()
@@ -63,7 +66,6 @@ def load_channelnet(env, e):
     return model
 
 
-# ── Tính BER ─────────────────────────────────────────────────────────────────
 all_ber = {}
 
 for e in EXPS:
@@ -72,58 +74,73 @@ for e in EXPS:
     model = load_channelnet(env, e)
     mask  = env.get_mask()
     mask_np = mask.numpy() if hasattr(mask, "numpy") else np.array(mask)
-    results = {m: {} for m in ["LS", "LMMSE_perfect", "ChannelNet"]}
+    pilots = env.rg.pilot_pattern.pilots
+    results = {m: {} for m in ["LS", "LMMSE", "ChannelNet", "Perfect_CSI"]}
 
     for snr in SNR_RANGE:
-        y_list, x_list, ls_list, h_list, cn_list = [], [], [], [], []
+        y_list, x_list, ls_list, lmmse_list, cn_list, csi_list = [], [], [], [], [], []
 
         for _ in range(N_BATCHES):
             x_rg, y, h = env(BATCH_SIZE, snr, return_x=True)
 
-            # LS
+            # LS — giống Trainer.evaluate_ls()
             h_ls = unflatten_last_dim(
-                tf.math.divide_no_nan(
-                    env.extract_at_pilot_locations(y),
-                    env.rg.pilot_pattern.pilots),
+                tf.math.divide_no_nan(env.extract_at_pilot_locations(y), pilots),
                 (env.n_pilot_symbols, env.n_pilot_subcarriers))
             h_ls_full = linear_ls_baseline(
                 h_ls, env.config.num_ofdm_symbols, env.config.fft_size)
 
-            # ChannelNet
+            # LMMSE — giống Trainer.evaluate_lmmse()
+            y_nl = apply_noiseless([x_rg, h])
+            h_nl_ls = unflatten_last_dim(
+                tf.math.divide_no_nan(env.extract_at_pilot_locations(y_nl), pilots),
+                (env.n_pilot_symbols, env.n_pilot_subcarriers))
+            h_lmmse = lmmse_baseline(
+                h_nl_ls, h, h_ls, snr,
+                env.pilot_ofdm_symbol_indices,
+                env.config.num_ofdm_symbols, env.config.fft_size)
+
+            # ChannelNet — giống Trainer.evaluate()
+            inputs = env.estimate_at_pilot_locations(y)
             pre = tf.map_fn(
                 lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-                env.estimate_at_pilot_locations(y),
-                fn_output_signature=tf.float32)
-            h_cn = tf.map_fn(postprocess, model(pre, training=False),
-                             fn_output_signature=tf.complex64)
+                inputs, fn_output_signature=tf.float32)
+            h_cn = tf.map_fn(
+                postprocess, model(pre, training=False),
+                fn_output_signature=tf.complex64)
 
-            y_list.append(y.numpy());  x_list.append(x_rg.numpy())
+            y_list.append(y.numpy());   x_list.append(x_rg.numpy())
             ls_list.append(h_ls_full.numpy())
-            h_list.append(h.numpy())   # LMMSE oracle = true channel
+            lmmse_list.append(np.array(h_lmmse))
             cn_list.append(h_cn.numpy())
+            csi_list.append(h.numpy())
 
-        results["LS"][snr]            = compute_ber_batch(y_list, ls_list, x_list, mask_np)
-        results["LMMSE_perfect"][snr] = compute_ber_batch(y_list, h_list,  x_list, mask_np)
-        results["ChannelNet"][snr]    = compute_ber_batch(y_list, cn_list, x_list, mask_np)
+        results["LS"][snr]          = compute_ber_batch(y_list, ls_list,    x_list, mask_np)
+        results["LMMSE"][snr]       = compute_ber_batch(y_list, lmmse_list, x_list, mask_np)
+        results["ChannelNet"][snr]  = compute_ber_batch(y_list, cn_list,    x_list, mask_np)
+        results["Perfect_CSI"][snr] = compute_ber_batch(y_list, csi_list,   x_list, mask_np)
         print(f"  SNR={snr:2d}dB  LS={results['LS'][snr]:.4f}  "
-              f"LMMSE={results['LMMSE_perfect'][snr]:.4f}  "
-              f"CN={results['ChannelNet'][snr]:.4f}")
+              f"LMMSE={results['LMMSE'][snr]:.4f}  "
+              f"CN={results['ChannelNet'][snr]:.4f}  "
+              f"PerfCSI={results['Perfect_CSI'][snr]:.4f}")
 
     with open(BER_DIR / f"{e['name']}.json", "w") as f:
         json.dump({k: {str(s): v for s, v in d.items()}
                    for k, d in results.items()}, f, indent=2)
     all_ber[e["name"]] = results
 
-# ── Vẽ BER (phần plot.py CeBed không có) ────────────────────────────────────
-STYLES = {"LS": ("blue","o","--"), "LMMSE_perfect": ("orange","s","-."), "ChannelNet": ("red","^","-")}
-LABELS = {"LS": "LS", "LMMSE_perfect": "LMMSE (oracle)", "ChannelNet": "ChannelNet"}
-
+# Vẽ BER
+STYLES = {
+    "LS":          ("blue",   "o", "--"),
+    "LMMSE":       ("orange", "s", "-."),
+    "ChannelNet":  ("red",    "^", "-"),
+    "Perfect_CSI": ("green",  "x", ":"),
+}
 for e in EXPS:
     fig, ax = plt.subplots(figsize=(6, 4))
     for method, (color, marker, ls) in STYLES.items():
         bers = [all_ber[e["name"]][method][snr] for snr in SNR_RANGE]
-        ax.semilogy(SNR_RANGE, bers, color=color, marker=marker,
-                    linestyle=ls, label=LABELS[method])
+        ax.semilogy(SNR_RANGE, bers, color=color, marker=marker, linestyle=ls, label=method)
     ax.set_xlabel("SNR (dB)"); ax.set_ylabel("BER")
     ax.set_title(f"BER vs SNR — {e['name']}")
     ax.legend(); ax.grid(True, which="both", linestyle="--", alpha=0.4)
