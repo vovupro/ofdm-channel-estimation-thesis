@@ -20,7 +20,7 @@ from src.ber_extension import zf_equalize, qpsk_demap
 from src.utils import nmse_db
 
 SNR_RANGE  = [0, 5, 10, 15, 20]
-N_BATCHES  = 20
+N_BATCHES  = 10
 BATCH_SIZE = 50
 OUT_DIR    = ROOT / "results" / "train_output"
 BER_DIR    = ROOT / "results" / "ber"
