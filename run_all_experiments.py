@@ -125,6 +125,7 @@ if not SKIP_TRAIN:
             "--output_dir",      OUTPUT / e["name"],
             "--epochs",          50,
             "--dataset_name",    "SionnaOfflineMD",
+            "--input_type",      "low",
         ])
 
 # ── Bước 3: Ablation Doppler (script riêng, evaluate.py không đủ) ─────────────
