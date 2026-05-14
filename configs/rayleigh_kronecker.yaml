@@ -1,0 +1,39 @@
+# Thí nghiệm 2: Rayleigh kronecker-pilot
+name: rayleigh_kronecker
+experiment_name: siso_1_rayleigh_kronecker_1_ps1_p72
+
+# Cấu hình kênh (EnvConfig)
+scenario: Rayleigh
+pilot_pattern: kronecker
+p_spacing: 1
+carrier_frequency: 3.0e9
+ue_speed: 3.0
+fft_size: 72
+num_ofdm_symbols: 14
+subcarrier_spacing: 30000.0
+n_ues: 1
+num_streams_per_tx: 1
+num_rx_antennas: 1
+num_bits_per_symbol: 2
+los: false
+path_loss: false
+shadowing: false
+normalize_channel: true
+dynamic_topology: true
+pilot_ofdm_symbol_indices: [3, 10]
+
+# Dải SNR đánh giá (dB)
+snr_range: [0, 5, 10, 15, 20]
+
+# Sinh dataset
+dataset_size: 2000
+num_domains: 5
+dataset_seed: 0
+
+# Huấn luyện ChannelNet
+epochs: 50
+train_batch_size: 32
+eval_batch_size: 32
+lr: 0.001
+early_stopping: false
+seed: 42

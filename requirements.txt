@@ -1,0 +1,7 @@
+tensorflow==2.15.0
+sionna==0.16.2
+numpy
+matplotlib
+pyyaml
+pandas
+jupyter

@@ -1,0 +1,42 @@
+# Thí nghiệm 5 (Ablation): UMa block-pilot, ue_speed=30 m/s (Doppler cao)
+# f_D_max = 30 * 3e9 / 3e8 = 300 Hz
+name: uma_block_doppler30
+experiment_name: siso_1_uma_block_1_ps2_p72
+
+# Cấu hình kênh (EnvConfig)
+scenario: uma
+pilot_pattern: block
+p_spacing: 2
+carrier_frequency: 3.0e9
+ue_speed: 30.0              # Doppler cao (300 Hz max)
+fft_size: 72
+num_ofdm_symbols: 14
+subcarrier_spacing: 30000.0
+n_ues: 1
+num_streams_per_tx: 1
+num_rx_antennas: 1
+num_bits_per_symbol: 2
+los: false
+path_loss: false
+shadowing: false
+normalize_channel: true
+dynamic_topology: true
+pilot_ofdm_symbol_indices: [3, 10]
+
+# Dải SNR đánh giá (dB)
+snr_range: [0, 5, 10, 15, 20]
+
+# Sinh dataset
+dataset_size: 2000
+num_domains: 5
+dataset_seed: 0
+
+# Huấn luyện ChannelNet (matched: train tại speed=30)
+epochs: 50
+train_batch_size: 32
+eval_batch_size: 32
+lr: 0.001
+early_stopping: false
+seed: 42
+
+# Ablation: checkpoint mismatched từ uma_block (speed=3) sẽ được load riêng trong script

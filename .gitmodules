@@ -1,0 +1,3 @@
+[submodule "cebed"]
+	path = cebed
+	url = https://github.com/SAIC-MONTREAL/CeBed.git
