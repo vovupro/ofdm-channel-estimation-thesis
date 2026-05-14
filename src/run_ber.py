@@ -22,7 +22,7 @@ from src.utils import nmse_db
 
 SNR_RANGE  = [0, 5, 10, 15, 20]   # khớp với 5 domain trong dataset
 BATCH_SIZE = 100
-N_SAMPLES  = 500                   # mỗi SNR lấy 500 mẫu từ HDF5
+N_SAMPLES  = 200                   # test_datasets có 200 mẫu/SNR (seed=99, tách biệt train)
 OUT_DIR    = ROOT / "results" / "train_output"
 DATA_DIR   = ROOT / "results" / "test_datasets"
 BER_DIR    = ROOT / "results" / "ber"
