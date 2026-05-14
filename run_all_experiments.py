@@ -150,7 +150,12 @@ run([PYTHON, ROOT / "src/run_runtime.py"], cwd=ROOT)
 print("\n" + "="*60)
 print("BƯỚC 6: Vẽ NMSE vs SNR (cebed/scripts/plot.py)")
 print("="*60)
-run([PYTHON, CEBED / "scripts/plot.py", str(OUTPUT), "thesis_benchmark"])
+run([PYTHON, CEBED / "scripts/plot.py",
+     str(OUTPUT / "rayleigh_block"),
+     str(OUTPUT / "rayleigh_kronecker"),
+     str(OUTPUT / "uma_block"),
+     str(OUTPUT / "uma_kronecker"),
+     "thesis_benchmark"])
 
 # ── Bước 7: Sinh bảng CSV cho luận văn ───────────────────────────────────────
 print("\n" + "="*60)
