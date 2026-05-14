@@ -1,7 +1,4 @@
-"""
-Tính BER vs SNR — ZF equalization + QPSK hard decision.
-Chạy sau khi train.py đã hoàn thành.
-"""
+"""Tính BER vs SNR — ZF + QPSK. Chạy sau khi train.py xong."""
 import sys, json
 from pathlib import Path
 import numpy as np
@@ -18,7 +15,8 @@ from cebed.baselines import linear_ls_baseline, lmmse_baseline
 from cebed.utils import unflatten_last_dim
 from cebed.datasets.sionna import preprocess_inputs
 from cebed.datasets.utils import postprocess
-from src.ber_extension import compute_ber_batch
+from src.cn_config import CN_HPARAMS
+from src.ber_extension import compute_ber
 
 SNR_RANGE  = [0, 5, 10, 15, 20]
 N_BATCHES  = 20
@@ -39,12 +37,6 @@ EXPS = [
     dict(name="uma_kronecker",      exp_name="siso_1_uma_kronecker_1_ps1_p72",
          scenario="uma",      pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
 ]
-
-CN_HPARAMS = dict(
-    dropout_rate=0.1, sr_hidden_size=[64, 32], sr_kernels=[9, 1, 5],
-    dc_hidden=64, num_dc_layers=18, input_type="low",
-    lr=0.001, int_type="bilinear", output_dim=[14, 72, 2],
-)
 
 apply_noiseless = ApplyOFDMChannel(add_awgn=False, dtype=tf.complex64)
 
@@ -70,15 +62,15 @@ all_ber = {}
 
 for e in EXPS:
     print(f"\n--- BER: {e['name']} ---")
-    env   = make_env(e)
-    model = load_channelnet(env, e)
-    mask  = env.get_mask()
-    mask_np = mask.numpy() if hasattr(mask, "numpy") else np.array(mask)
+    env    = make_env(e)
+    model  = load_channelnet(env, e)
+    mask   = env.get_mask()
     pilots = env.rg.pilot_pattern.pilots
-    results = {m: {} for m in ["LS", "LMMSE", "ChannelNet", "Perfect_CSI"]}
+    mask_np = mask.numpy() if hasattr(mask, "numpy") else np.array(mask)
+    results = {m: {} for m in ["LS", "LMMSE", "ChannelNet"]}
 
     for snr in SNR_RANGE:
-        y_list, x_list, ls_list, lmmse_list, cn_list, csi_list = [], [], [], [], [], []
+        y_list, x_list, ls_list, lmmse_list, cn_list = [], [], [], [], []
 
         for _ in range(N_BATCHES):
             x_rg, y, h = env(BATCH_SIZE, snr, return_x=True)
@@ -101,28 +93,24 @@ for e in EXPS:
                 env.config.num_ofdm_symbols, env.config.fft_size)
 
             # ChannelNet — giống Trainer.evaluate()
-            inputs = env.estimate_at_pilot_locations(y)
             pre = tf.map_fn(
                 lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-                inputs, fn_output_signature=tf.float32)
-            h_cn = tf.map_fn(
-                postprocess, model(pre, training=False),
-                fn_output_signature=tf.complex64)
+                env.estimate_at_pilot_locations(y),
+                fn_output_signature=tf.float32)
+            h_cn = tf.map_fn(postprocess, model(pre, training=False),
+                             fn_output_signature=tf.complex64)
 
-            y_list.append(y.numpy());   x_list.append(x_rg.numpy())
+            y_list.append(y.numpy());    x_list.append(x_rg.numpy())
             ls_list.append(h_ls_full.numpy())
             lmmse_list.append(np.array(h_lmmse))
             cn_list.append(h_cn.numpy())
-            csi_list.append(h.numpy())
 
-        results["LS"][snr]          = compute_ber_batch(y_list, ls_list,    x_list, mask_np)
-        results["LMMSE"][snr]       = compute_ber_batch(y_list, lmmse_list, x_list, mask_np)
-        results["ChannelNet"][snr]  = compute_ber_batch(y_list, cn_list,    x_list, mask_np)
-        results["Perfect_CSI"][snr] = compute_ber_batch(y_list, csi_list,   x_list, mask_np)
+        results["LS"][snr]         = compute_ber(y_list, ls_list,    x_list, mask_np)
+        results["LMMSE"][snr]      = compute_ber(y_list, lmmse_list, x_list, mask_np)
+        results["ChannelNet"][snr] = compute_ber(y_list, cn_list,    x_list, mask_np)
         print(f"  SNR={snr:2d}dB  LS={results['LS'][snr]:.4f}  "
               f"LMMSE={results['LMMSE'][snr]:.4f}  "
-              f"CN={results['ChannelNet'][snr]:.4f}  "
-              f"PerfCSI={results['Perfect_CSI'][snr]:.4f}")
+              f"CN={results['ChannelNet'][snr]:.4f}")
 
     with open(BER_DIR / f"{e['name']}.json", "w") as f:
         json.dump({k: {str(s): v for s, v in d.items()}
@@ -131,10 +119,9 @@ for e in EXPS:
 
 # Vẽ BER
 STYLES = {
-    "LS":          ("blue",   "o", "--"),
-    "LMMSE":       ("orange", "s", "-."),
-    "ChannelNet":  ("red",    "^", "-"),
-    "Perfect_CSI": ("green",  "x", ":"),
+    "LS":         ("blue",   "o", "--"),
+    "LMMSE":      ("orange", "s", "-."),
+    "ChannelNet": ("red",    "^", "-"),
 }
 for e in EXPS:
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -148,5 +135,3 @@ for e in EXPS:
     plt.savefig(FIG_DIR / f"ber_{e['name']}.png", dpi=150)
     plt.close()
     print(f"  → results/figures/ber_{e['name']}.png")
-
-print("\n=== BER hoàn tất ===")

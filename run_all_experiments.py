@@ -151,4 +151,10 @@ print("BƯỚC 6: Vẽ NMSE vs SNR (cebed/scripts/plot.py)")
 print("="*60)
 run([PYTHON, CEBED / "scripts/plot.py", str(OUTPUT), "thesis_benchmark"])
 
+# ── Bước 7: Sinh bảng CSV cho luận văn ───────────────────────────────────────
+print("\n" + "="*60)
+print("BƯỚC 7: Sinh bảng tổng hợp (src/make_tables.py)")
+print("="*60)
+run([PYTHON, ROOT / "src/make_tables.py"], cwd=ROOT)
+
 print("\n=== Hoàn tất! Kết quả trong results/ và benchmark/figures/ ===")

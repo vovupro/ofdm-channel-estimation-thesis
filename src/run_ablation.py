@@ -1,5 +1,5 @@
 """
-Ablation Doppler: so sánh ChannelNet trained ở speed=3 (mismatch)
+Ablation Doppler: so sánh ChannelNet trained speed=3 (mismatch)
 vs speed=30 (matched), cả hai evaluate trên môi trường speed=30.
 """
 import sys, json
@@ -18,7 +18,8 @@ from cebed.baselines import linear_ls_baseline, lmmse_baseline
 from cebed.utils import unflatten_last_dim
 from cebed.datasets.sionna import preprocess_inputs
 from cebed.datasets.utils import postprocess
-from cebed.evaluation import mse
+from src.cn_config import CN_HPARAMS
+from src.utils import nmse_db
 
 SNR_RANGE  = [0, 5, 10, 15, 20]
 N_BATCHES  = 20
@@ -31,15 +32,8 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 EXP_NAME = "siso_1_uma_block_1_ps2_p72"
 
-CN_HPARAMS = dict(
-    dropout_rate=0.1, sr_hidden_size=[64, 32], sr_kernels=[9, 1, 5],
-    dc_hidden=64, num_dc_layers=18, input_type="low",
-    lr=0.001, int_type="bilinear", output_dim=[14, 72, 2],
-)
-
 apply_noiseless = ApplyOFDMChannel(add_awgn=False, dtype=tf.complex64)
 
-# Môi trường test: speed=30
 cfg = EnvConfig()
 cfg.scenario, cfg.pilot_pattern = "uma", "block"
 cfg.p_spacing, cfg.ue_speed     = 2, 30
@@ -59,14 +53,14 @@ def load_channelnet(output_name):
     return model
 
 
-model_mismatch = load_channelnet("uma_block")           # trained speed=3
-model_matched  = load_channelnet("uma_block_doppler30") # trained speed=30
+model_mismatch = load_channelnet("uma_block")
+model_matched  = load_channelnet("uma_block_doppler30")
 
 print("Ablation: evaluate trên env speed=30 m/s")
-results = {m: [] for m in ["LS", "LMMSE", "ChannelNet_mismatch", "ChannelNet_matched"]}
+results = {key: [] for key in ["LS", "LMMSE", "ChannelNet_mismatch", "ChannelNet_matched"]}
 
 for snr in SNR_RANGE:
-    acc = {m: [] for m in results}
+    acc = {key: [] for key in results}
 
     for _ in range(N_BATCHES):
         x_rg, y, h = env(BATCH_SIZE, snr, return_x=True)
@@ -89,29 +83,23 @@ for snr in SNR_RANGE:
             env.config.num_ofdm_symbols, env.config.fft_size)
 
         # ChannelNet — giống Trainer.evaluate()
-        inputs = env.estimate_at_pilot_locations(y)
         pre = tf.map_fn(
             lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-            inputs, fn_output_signature=tf.float32)
+            env.estimate_at_pilot_locations(y),
+            fn_output_signature=tf.float32)
         h_mismatch = tf.map_fn(postprocess, model_mismatch(pre, training=False),
                                fn_output_signature=tf.complex64)
         h_matched  = tf.map_fn(postprocess, model_matched(pre,  training=False),
                                fn_output_signature=tf.complex64)
 
-        # NMSE (dB) — dùng mse() của CeBed, convert sang dB
-        h_sq = tf.squeeze(h)
-        def to_nmse_db(h_hat):
-            num = mse(h_sq, tf.squeeze(h_hat)).numpy()
-            den = mse(h_sq, tf.zeros_like(h_sq)).numpy() + 1e-12
-            return float(10.0 * np.log10(num / den + 1e-12))
+        h_np = h.numpy()
+        acc["LS"].append(nmse_db(h_np, h_ls_full.numpy()))
+        acc["LMMSE"].append(nmse_db(h_np, np.array(h_lmmse)))
+        acc["ChannelNet_mismatch"].append(nmse_db(h_np, h_mismatch.numpy()))
+        acc["ChannelNet_matched"].append(nmse_db(h_np, h_matched.numpy()))
 
-        acc["LS"].append(to_nmse_db(h_ls_full))
-        acc["LMMSE"].append(to_nmse_db(tf.constant(h_lmmse, dtype=tf.complex64)))
-        acc["ChannelNet_mismatch"].append(to_nmse_db(h_mismatch))
-        acc["ChannelNet_matched"].append(to_nmse_db(h_matched))
-
-    for m in results:
-        results[m].append(float(np.mean(acc[m])))
+    for key in results:
+        results[key].append(float(np.mean(acc[key])))
     print(f"  SNR={snr:2d}dB  LS={results['LS'][-1]:.2f}  "
           f"LMMSE={results['LMMSE'][-1]:.2f}  "
           f"Mismatch={results['ChannelNet_mismatch'][-1]:.2f}  "
@@ -120,7 +108,6 @@ for snr in SNR_RANGE:
 with open(ABL_DIR / "doppler_ablation.json", "w") as f:
     json.dump({"snr": SNR_RANGE, **results}, f, indent=2)
 
-# Vẽ ablation
 STYLES = {
     "LS":                  ("blue",   "o", "--"),
     "LMMSE":               ("orange", "s", "-."),
@@ -137,6 +124,5 @@ ax.legend(); ax.grid(True, linestyle="--", alpha=0.4)
 plt.tight_layout()
 plt.savefig(FIG_DIR / "ablation_doppler.png", dpi=150)
 plt.close()
-print("\n  → results/ablation/doppler_ablation.json")
+print("  → results/ablation/doppler_ablation.json")
 print("  → results/figures/ablation_doppler.png")
-print("\n=== Ablation hoàn tất ===")
