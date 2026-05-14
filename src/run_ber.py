@@ -1,8 +1,9 @@
-"""BER và NMSE vs SNR — cùng 1 vòng lặp, cùng data. Chạy sau train.py."""
-import sys, json
+"""BER và NMSE vs SNR — load dataset có sẵn, không sinh kênh lại."""
+import sys, json, glob
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
+import h5py
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).parent.parent
@@ -20,9 +21,10 @@ from src.ber_extension import zf_equalize, qpsk_demap
 from src.utils import nmse_db
 
 SNR_RANGE  = [0, 5, 10, 15, 20]
-N_BATCHES  = 10
-BATCH_SIZE = 50
+BATCH_SIZE = 100
+N_SAMPLES  = 500   # lấy N_SAMPLES từ mỗi domain trong dataset
 OUT_DIR    = ROOT / "results" / "train_output"
+DATA_DIR   = ROOT / "results" / "datasets"
 BER_DIR    = ROOT / "results" / "ber"
 FIG_DIR    = ROOT / "results" / "figures"
 BER_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,6 +68,16 @@ def load_channelnet(env, e):
     return model
 
 
+def load_snr_data(name, snr_idx, n=N_SAMPLES):
+    """Load h, y, x cho 1 SNR domain từ HDF5 dataset."""
+    f_path = glob.glob(str(DATA_DIR / name / "**" / "data.hdf5"), recursive=True)[0]
+    with h5py.File(f_path, "r") as f:
+        h = np.array(f["h"][snr_idx, :n])
+        y = np.array(f["y"][snr_idx, :n])
+        x = np.array(f["x"][snr_idx, :n])
+    return h, y, x
+
+
 all_results = {}
 
 for e in EXPS:
@@ -79,42 +91,47 @@ for e in EXPS:
 
     results = {m: {"ber": {}, "nmse": {}} for m in METHODS}
 
-    for snr in SNR_RANGE:
+    for snr_idx, snr in enumerate(SNR_RANGE):
+        # Load từ dataset — không chạy Sionna lại
+        h_all, y_all, x_all = load_snr_data(e["name"], snr_idx)
+
         acc_nmse   = {m: [] for m in METHODS}
         acc_errors = {m: 0  for m in METHODS}
         acc_bits   = {m: 0  for m in METHODS}
 
-        for _ in range(N_BATCHES):
-            x_rg, y, h = env(BATCH_SIZE, snr, return_x=True)
-            h_np = h.numpy()
+        for i in range(0, len(h_all), BATCH_SIZE):
+            h_b = tf.constant(h_all[i:i+BATCH_SIZE], dtype=tf.complex64)
+            y_b = tf.constant(y_all[i:i+BATCH_SIZE], dtype=tf.complex64)
+            x_b = tf.constant(x_all[i:i+BATCH_SIZE], dtype=tf.complex64)
 
             # ── LS ──────────────────────────────────────────────────────────
             h_ls = unflatten_last_dim(
-                tf.math.divide_no_nan(env.extract_at_pilot_locations(y), pilots),
+                tf.math.divide_no_nan(env.extract_at_pilot_locations(y_b), pilots),
                 (env.n_pilot_symbols, env.n_pilot_subcarriers))
             h_ls_full = linear_ls_baseline(
                 h_ls, env.config.num_ofdm_symbols, env.config.fft_size)
 
-            # ── LMMSE ────────────────────────────────────────────────────────
-            y_nl    = apply_noiseless([x_rg, h])
+            # ── LMMSE (dùng noiseless y từ dataset h và x) ───────────────────
+            y_nl    = apply_noiseless([x_b, h_b])
             h_nl_ls = unflatten_last_dim(
                 tf.math.divide_no_nan(env.extract_at_pilot_locations(y_nl), pilots),
                 (env.n_pilot_symbols, env.n_pilot_subcarriers))
             h_lmmse = lmmse_baseline(
-                h_nl_ls, h, h_ls, snr,
+                h_nl_ls, h_b, h_ls, snr,
                 env.pilot_ofdm_symbol_indices,
                 env.config.num_ofdm_symbols, env.config.fft_size)
 
             # ── ChannelNet ───────────────────────────────────────────────────
             pre  = tf.map_fn(
                 lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-                env.estimate_at_pilot_locations(y),
+                env.estimate_at_pilot_locations(y_b),
                 fn_output_signature=tf.float32)
             h_cn = tf.map_fn(postprocess, model(pre, training=False),
                              fn_output_signature=tf.complex64)
 
-            y_np   = np.squeeze(y.numpy())
-            x_np   = np.squeeze(x_rg.numpy())
+            h_np = h_b.numpy()
+            y_np = np.squeeze(y_b.numpy())
+            x_np = np.squeeze(x_b.numpy())
             if y_np.ndim == 2: y_np = y_np[np.newaxis]
             if x_np.ndim == 2: x_np = x_np[np.newaxis]
 
@@ -126,10 +143,8 @@ for e in EXPS:
                 h_hat = np.squeeze(h_hat_raw)
                 if h_hat.ndim == 2: h_hat = h_hat[np.newaxis]
 
-                # NMSE — tính từ H_hat vs H_true
                 acc_nmse[method].append(nmse_db(h_np, h_hat))
 
-                # BER — dùng H_hat để cân bằng ZF → giải điều chế QPSK
                 x_hat     = zf_equalize(y_np, h_hat)
                 bits_hat  = qpsk_demap(x_hat[:, data_mask])
                 bits_sent = qpsk_demap(x_np[:, data_mask])
@@ -163,16 +178,15 @@ for e in EXPS:
     fig.suptitle(e["name"].replace("_", " ").title())
 
     for method, (color, marker, ls, ms, zorder) in STYLES.items():
-        # BER (log, bỏ BER=0)
-        bers = [res[method]["ber"][s] for s in SNR_RANGE]
+        bers  = [res[method]["ber"][s]  for s in SNR_RANGE]
+        nmses = [res[method]["nmse"][s] for s in SNR_RANGE]
+
         snr_b = [s for s, b in zip(SNR_RANGE, bers) if b > 0]
         ber_b = [b for b in bers if b > 0]
         ax1.semilogy(snr_b, ber_b, color=color, marker=marker, linestyle=ls,
                      markersize=ms, zorder=zorder, linewidth=1.8,
                      markeredgecolor="white", markeredgewidth=0.5, label=method)
 
-        # NMSE (dB)
-        nmses = [res[method]["nmse"][s] for s in SNR_RANGE]
         ax2.plot(SNR_RANGE, nmses, color=color, marker=marker, linestyle=ls,
                  markersize=ms, zorder=zorder, linewidth=1.8,
                  markeredgecolor="white", markeredgewidth=0.5, label=method)
