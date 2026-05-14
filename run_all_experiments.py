@@ -9,7 +9,7 @@ Cách dùng:
     python run_all_experiments.py --skip-train
 """
 
-import subprocess, sys, yaml
+import os, subprocess, sys, yaml
 from pathlib import Path
 
 ROOT   = Path(__file__).parent
@@ -38,7 +38,9 @@ ABLATION_MATCHED = dict(name="uma_block_doppler30",
 def run(cmd, cwd=CEBED):
     cmd = [str(x) for x in cmd]
     print("\n>>>", " ".join(cmd))
-    subprocess.run(cmd, check=True, cwd=str(cwd))
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(CEBED) + os.pathsep + str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
 
 
 def find_data(base: Path) -> Path:
