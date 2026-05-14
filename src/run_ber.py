@@ -29,9 +29,9 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 EXPS = [
     dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps2_p72",
-         scenario="rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
+         scenario="Rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
     dict(name="rayleigh_kronecker", exp_name="siso_1_rayleigh_kronecker_1_ps1_p72",
-         scenario="rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
+         scenario="Rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
     dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps2_p72",
          scenario="uma",      pilot_pattern="block",     p_spacing=2, ue_speed=3),
     dict(name="uma_kronecker",      exp_name="siso_1_uma_kronecker_1_ps1_p72",

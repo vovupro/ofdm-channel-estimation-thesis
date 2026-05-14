@@ -9,7 +9,7 @@ Cách dùng:
     python run_all_experiments.py --skip-train
 """
 
-import os, subprocess, sys, yaml
+import subprocess, sys, yaml
 from pathlib import Path
 
 ROOT   = Path(__file__).parent
@@ -20,9 +20,9 @@ PYTHON = sys.executable
 
 EXPS = [
     dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps2_p72",
-         scenario="rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
+         scenario="Rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
     dict(name="rayleigh_kronecker", exp_name="siso_1_rayleigh_kronecker_1_ps1_p72",
-         scenario="rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
+         scenario="Rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
     dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps2_p72",
          scenario="uma",      pilot_pattern="block",     p_spacing=2, ue_speed=3),
     dict(name="uma_kronecker",      exp_name="siso_1_uma_kronecker_1_ps1_p72",
@@ -38,9 +38,7 @@ ABLATION_MATCHED = dict(name="uma_block_doppler30",
 def run(cmd, cwd=CEBED):
     cmd = [str(x) for x in cmd]
     print("\n>>>", " ".join(cmd))
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(CEBED) + os.pathsep + str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-    subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
+    subprocess.run(cmd, check=True, cwd=str(cwd))
 
 
 def find_data(base: Path) -> Path:
