@@ -12,11 +12,12 @@ Cách dùng:
 import subprocess, sys, yaml, pandas as pd
 from pathlib import Path
 
-ROOT   = Path(__file__).parent
-CEBED  = ROOT / "cebed"
-DATA   = ROOT / "results" / "datasets"
-OUTPUT = ROOT / "results" / "train_output"
-PYTHON = sys.executable
+ROOT      = Path(__file__).parent
+CEBED     = ROOT / "cebed"
+DATA      = ROOT / "results" / "datasets"
+TEST_DATA = ROOT / "results" / "test_datasets"
+OUTPUT    = ROOT / "results" / "train_output"
+PYTHON    = sys.executable
 
 EXPS = [
     dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps2_p72",
@@ -64,6 +65,24 @@ def gen_args(e: dict) -> list:
     ]
 
 
+def gen_test_args(e: dict) -> list:
+    """Sinh 200 mẫu/SNR, seed=99 — tách biệt hoàn toàn khỏi tập train."""
+    return [
+        PYTHON, CEBED / "scripts/generate_datasets_from_sionna.py",
+        "--scenario",          e["scenario"],
+        "--pilot_pattern",     e["pilot_pattern"],
+        "--p_spacing",         e["p_spacing"],
+        "--carrier_frequency", 3.0e9,
+        "--ue_speed",          e["ue_speed"],
+        "--num_domains",       5,
+        "--start_ds",          0,
+        "--end_ds",            25,
+        "--size",              200,
+        "--seed",              99,
+        "--output_dir",        TEST_DATA / e["name"],
+    ]
+
+
 def patch_channelnet_yaml():
     """Thêm experiment thiếu vào ChannelNet.yaml nếu chưa có (tránh KeyError)."""
     yaml_path = CEBED / "hyperparams" / "ChannelNet.yaml"
@@ -106,10 +125,16 @@ patch_channelnet_yaml()
 # ── Bước 1: Sinh dataset ──────────────────────────────────────────────────────
 if not SKIP_GEN:
     print("\n" + "="*60)
-    print("BƯỚC 1: Sinh dataset")
+    print("BƯỚC 1a: Sinh train dataset (2000 mẫu/SNR, seed=0)")
     print("="*60)
     for e in EXPS + [ABLATION_MATCHED]:
         run(gen_args(e))
+
+    print("\n" + "="*60)
+    print("BƯỚC 1b: Sinh test dataset (200 mẫu/SNR, seed=99, tách biệt train)")
+    print("="*60)
+    for e in EXPS + [ABLATION_MATCHED]:
+        run(gen_test_args(e))
 
 # ── Bước 2: Train ChannelNet (CeBed tự eval LS & LMMSE → test_mses.csv) ─────
 if not SKIP_TRAIN:
@@ -134,27 +159,21 @@ for f in OUTPUT.rglob("test_mses.csv"):
     df = df[df["method"] != "ALMMSE"]
     df.to_csv(f, index=False)
 
-# ── Bước 3: Ablation Doppler (script riêng, evaluate.py không đủ) ─────────────
+# ── Bước 3: BER + NMSE + Ablation Doppler ────────────────────────────────────
 print("\n" + "="*60)
-print("BƯỚC 3: Ablation Doppler mismatch vs matched (src/run_ablation.py)")
-print("="*60)
-run([PYTHON, ROOT / "src/run_ablation.py"], cwd=ROOT)
-
-# ── Bước 4: BER (đóng góp đồ án) ─────────────────────────────────────────────
-print("\n" + "="*60)
-print("BƯỚC 4: BER via ZF + QPSK")
+print("BƯỚC 3: BER + NMSE + Ablation Doppler (src/run_ber.py)")
 print("="*60)
 run([PYTHON, ROOT / "src/run_ber.py"], cwd=ROOT)
 
-# ── Bước 5: Runtime ───────────────────────────────────────────────────────────
+# ── Bước 4: Runtime ───────────────────────────────────────────────────────────
 print("\n" + "="*60)
-print("BƯỚC 5: Runtime & Params")
+print("BƯỚC 4: Runtime & Params")
 print("="*60)
 run([PYTHON, ROOT / "src/run_runtime.py"], cwd=ROOT)
 
-# ── Bước 6: NMSE plot (cebed/scripts/plot.py) ─────────────────────────────────
+# ── Bước 5: NMSE plot tổng hợp (cebed/scripts/plot.py) ───────────────────────
 print("\n" + "="*60)
-print("BƯỚC 6: Vẽ NMSE vs SNR (cebed/scripts/plot.py)")
+print("BƯỚC 5: Vẽ NMSE tổng hợp (cebed/scripts/plot.py)")
 print("="*60)
 run([PYTHON, CEBED / "scripts/plot.py",
      str(OUTPUT / "rayleigh_block"),
@@ -163,9 +182,9 @@ run([PYTHON, CEBED / "scripts/plot.py",
      str(OUTPUT / "uma_kronecker"),
      "thesis_benchmark"])
 
-# ── Bước 7: Sinh bảng CSV cho luận văn ───────────────────────────────────────
+# ── Bước 6: Sinh bảng CSV cho luận văn ───────────────────────────────────────
 print("\n" + "="*60)
-print("BƯỚC 7: Sinh bảng tổng hợp (src/make_tables.py)")
+print("BƯỚC 6: Sinh bảng tổng hợp (src/make_tables.py)")
 print("="*60)
 run([PYTHON, ROOT / "src/make_tables.py"], cwd=ROOT)
 

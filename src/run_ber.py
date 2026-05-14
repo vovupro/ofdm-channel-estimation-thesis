@@ -159,29 +159,32 @@ def run_experiment(dataset_name, env, models_dict, styles):
     return results
 
 
-def plot_results(res, styles, title, out_path):
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
-    fig.suptitle(title)
-    for method, (color, marker, ls, ms, zorder) in styles.items():
-        kw = dict(color=color, marker=marker, linestyle=ls, markersize=ms,
-                  zorder=zorder, linewidth=1.8, markeredgecolor="white",
-                  markeredgewidth=0.5, label=method.replace("_", " "))
-        bers  = [res[method]["ber"][s]  for s in SNR_RANGE]
-        nmses = [res[method]["nmse"][s] for s in SNR_RANGE]
-        snr_b = [s for s, b in zip(SNR_RANGE, bers) if b > 0]
-        ax1.semilogy(snr_b, [b for b in bers if b > 0], **kw)
-        ax2.plot(SNR_RANGE, nmses, **kw)
-    for ax, ylabel, title_ax in [
-        (ax1, "BER",       "BER vs SNR"),
-        (ax2, "NMSE (dB)", "NMSE vs SNR"),
+def plot_results(res, styles, title, ber_path, nmse_path):
+    """Lưu BER và NMSE thành 2 file PNG riêng."""
+    for path, ylabel, use_semilogy, invert in [
+        (ber_path,  "BER",       True,  False),
+        (nmse_path, "NMSE (dB)", False, True),
     ]:
-        ax.set_xlabel("SNR (dB)"); ax.set_ylabel(ylabel); ax.set_title(title_ax)
+        _, ax = plt.subplots(figsize=(6, 4))
+        for method, (color, marker, ls, ms, zorder) in styles.items():
+            kw = dict(color=color, marker=marker, linestyle=ls, markersize=ms,
+                      zorder=zorder, linewidth=1.8, markeredgecolor="white",
+                      markeredgewidth=0.5, label=method.replace("_", " "))
+            vals = [res[method]["ber"][s] if ylabel == "BER"
+                    else res[method]["nmse"][s] for s in SNR_RANGE]
+            if use_semilogy:
+                snr_b = [s for s, b in zip(SNR_RANGE, vals) if b > 0]
+                ax.semilogy(snr_b, [b for b in vals if b > 0], **kw)
+            else:
+                ax.plot(SNR_RANGE, vals, **kw)
+        ax.set_xlabel("SNR (dB)"); ax.set_ylabel(ylabel)
+        ax.set_title(f"{ylabel} vs SNR — {title}")
         ax.legend(); ax.grid(True, which="both", linestyle="--", alpha=0.4)
-    ax2.invert_yaxis()
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    plt.close()
-    print(f"  → {out_path.relative_to(ROOT)}")
+        if invert: ax.invert_yaxis()
+        plt.tight_layout()
+        plt.savefig(path, dpi=150)
+        plt.close()
+        print(f"  → {path.relative_to(ROOT)}")
 
 
 # ── 4 experiment chính ────────────────────────────────────────────────────────
@@ -197,7 +200,8 @@ for e in EXPS:
                    for m in STYLES_MAIN}, f, indent=2)
     plot_results(res, STYLES_MAIN,
                  e["name"].replace("_", " ").title(),
-                 FIG_DIR / f"{e['name']}.png")
+                 FIG_DIR / f"ber_{e['name']}.png",
+                 FIG_DIR / f"nmse_{e['name']}.png")
     all_results[e["name"]] = res
 
 
@@ -216,4 +220,5 @@ with open(ABL_DIR / "doppler_ablation.json", "w") as f:
                for m in STYLES_ABL}, f, indent=2)
 plot_results(res_abl, STYLES_ABL,
              "Ablation Doppler — UMa Block (eval speed=30 m/s)",
-             FIG_DIR / "ablation_doppler.png")
+             FIG_DIR / "ber_ablation_doppler.png",
+             FIG_DIR / "nmse_ablation_doppler.png")
