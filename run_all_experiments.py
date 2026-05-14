@@ -9,7 +9,7 @@ Cách dùng:
     python run_all_experiments.py --skip-train
 """
 
-import subprocess, sys, yaml
+import subprocess, sys, yaml, pandas as pd
 from pathlib import Path
 
 ROOT   = Path(__file__).parent
@@ -127,6 +127,12 @@ if not SKIP_TRAIN:
             "--dataset_name",    "SionnaOfflineMD",
             "--input_type",      "low",
         ])
+
+# Lọc ALMMSE khỏi test_mses.csv sau khi train
+for f in OUTPUT.rglob("test_mses.csv"):
+    df = pd.read_csv(f)
+    df = df[df["method"] != "ALMMSE"]
+    df.to_csv(f, index=False)
 
 # ── Bước 3: Ablation Doppler (script riêng, evaluate.py không đủ) ─────────────
 print("\n" + "="*60)
