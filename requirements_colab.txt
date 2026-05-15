@@ -1,6 +1,7 @@
-sionna==0.16.2
 matplotlib==3.8.4
 pyyaml==6.0.1
 pandas==2.2.2
 h5py==3.11.0
 seaborn
+scipy
+Pillow
