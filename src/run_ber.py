@@ -100,8 +100,11 @@ def get_h_hats(env, models_dict, mask, pilots, h_b, y_b, x_b, snr):
                              env.pilot_ofdm_symbol_indices,
                              env.config.num_ofdm_symbols, env.config.fft_size)
 
+    h_ls_pilot = unflatten_last_dim(
+        tf.math.divide_no_nan(env.extract_at_pilot_locations(y_b), pilots),
+        (env.n_pilot_symbols, env.n_pilot_subcarriers))
     pre = tf.map_fn(lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-                    env.estimate_at_pilot_locations(y_b), fn_output_signature=tf.float32)
+                    h_ls_pilot, fn_output_signature=tf.float32)
 
     result = {"LS": np.squeeze(h_ls_full.numpy()),
               "LMMSE": np.squeeze(np.array(h_lmmse))}
