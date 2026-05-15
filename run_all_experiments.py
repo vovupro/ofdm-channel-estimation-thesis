@@ -41,7 +41,7 @@ def run(cmd, cwd=CEBED):
     print("\n>>>", " ".join(cmd))
     existing = os.environ.get("PYTHONPATH", "")
     pythonpath = str(ROOT) + os.pathsep + str(CEBED) + (os.pathsep + existing if existing else "")
-    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONPATH": pythonpath, "TF_USE_LEGACY_KERAS": "1"}
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONPATH": pythonpath}
     subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
 
 
