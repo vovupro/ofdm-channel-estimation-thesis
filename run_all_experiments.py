@@ -39,7 +39,9 @@ ABLATION_MATCHED = dict(name="uma_block_doppler30",
 def run(cmd, cwd=CEBED):
     cmd = [str(x) for x in cmd]
     print("\n>>>", " ".join(cmd))
-    env = {**os.environ, "PYTHONUTF8": "1"}
+    existing = os.environ.get("PYTHONPATH", "")
+    pythonpath = str(ROOT) + os.pathsep + str(CEBED) + (os.pathsep + existing if existing else "")
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONPATH": pythonpath}
     subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
 
 
