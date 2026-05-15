@@ -11,9 +11,9 @@ TABLE_DIR.mkdir(parents=True, exist_ok=True)
 
 EXPS = ["rayleigh_block", "rayleigh_kronecker", "uma_block", "uma_kronecker"]
 EXP_NAMES = {
-    "rayleigh_block":     "siso_1_rayleigh_block_1_ps2_p72",
+    "rayleigh_block":     "siso_1_rayleigh_block_1_ps1_p72",
     "rayleigh_kronecker": "siso_1_rayleigh_kronecker_1_ps1_p72",
-    "uma_block":          "siso_1_uma_block_1_ps2_p72",
+    "uma_block":          "siso_1_uma_block_1_ps1_p72",
     "uma_kronecker":      "siso_1_uma_kronecker_1_ps1_p72",
 }
 SNR_REF = 10

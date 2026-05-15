@@ -30,13 +30,13 @@ FIG_DIR    = ROOT / "results" / "figures"
 ABL_DIR.mkdir(parents=True, exist_ok=True)
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-EXP_NAME = "siso_1_uma_block_1_ps2_p72"
+EXP_NAME = "siso_1_uma_block_1_ps1_p72"
 
 apply_noiseless = ApplyOFDMChannel(add_awgn=False, dtype=tf.complex64)
 
 cfg = EnvConfig()
 cfg.scenario, cfg.pilot_pattern = "uma", "block"
-cfg.p_spacing, cfg.ue_speed     = 2, 30
+cfg.p_spacing, cfg.ue_speed     = 1, 30
 cfg.carrier_frequency           = 3.0e9
 env = OfdmEnv(cfg)
 

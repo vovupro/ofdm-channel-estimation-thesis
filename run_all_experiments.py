@@ -9,7 +9,7 @@ Cách dùng:
     python run_all_experiments.py --skip-train
 """
 
-import subprocess, sys, yaml, pandas as pd
+import subprocess, sys, os, yaml, pandas as pd
 from pathlib import Path
 
 ROOT      = Path(__file__).parent
@@ -20,26 +20,27 @@ OUTPUT    = ROOT / "results" / "train_output"
 PYTHON    = sys.executable
 
 EXPS = [
-    dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps2_p72",
-         scenario="Rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
+    dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps1_p72",
+         scenario="Rayleigh", pilot_pattern="block",     p_spacing=1, ue_speed=3),
     dict(name="rayleigh_kronecker", exp_name="siso_1_rayleigh_kronecker_1_ps1_p72",
          scenario="Rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
-    dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps2_p72",
-         scenario="uma",      pilot_pattern="block",     p_spacing=2, ue_speed=3),
+    dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps1_p72",
+         scenario="uma",      pilot_pattern="block",     p_spacing=1, ue_speed=3),
     dict(name="uma_kronecker",      exp_name="siso_1_uma_kronecker_1_ps1_p72",
          scenario="uma",      pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
 ]
 
 # Ablation: train matched (speed=30) để so sánh với mismatch (speed=3)
 ABLATION_MATCHED = dict(name="uma_block_doppler30",
-                        exp_name="siso_1_uma_block_1_ps2_p72",
-                        scenario="uma", pilot_pattern="block", p_spacing=2, ue_speed=30)
+                        exp_name="siso_1_uma_block_1_ps1_p72",
+                        scenario="uma", pilot_pattern="block", p_spacing=1, ue_speed=30)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def run(cmd, cwd=CEBED):
     cmd = [str(x) for x in cmd]
     print("\n>>>", " ".join(cmd))
-    subprocess.run(cmd, check=True, cwd=str(cwd))
+    env = {**os.environ, "PYTHONUTF8": "1"}
+    subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
 
 
 def find_data(base: Path) -> Path:
@@ -60,7 +61,7 @@ def gen_args(e: dict) -> list:
         "--num_domains",       5,
         "--start_ds",          0,
         "--end_ds",            25,
-        "--size",              2000,
+        "--size",              1000,
         "--output_dir",        DATA / e["name"],
     ]
 
@@ -89,8 +90,9 @@ def patch_channelnet_yaml():
     with open(yaml_path, encoding="utf-8") as f:
         hparams = yaml.safe_load(f)
     needed = [
-        "siso_1_rayleigh_block_1_ps2_p72",
+        "siso_1_rayleigh_block_1_ps1_p72",
         "siso_1_rayleigh_kronecker_1_ps1_p72",
+        "siso_1_uma_block_1_ps1_p72",
         "siso_1_uma_kronecker_1_ps1_p72",
     ]
     missing = [k for k in needed if k not in hparams]

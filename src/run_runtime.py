@@ -4,6 +4,7 @@ from pathlib import Path
 import tensorflow as tf
 
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "cebed"))
 
 from cebed.envs import OfdmEnv, EnvConfig
@@ -12,8 +13,8 @@ from src.cn_config import CN_HPARAMS
 from src.runtime_meter import measure_all
 
 OUT_DIR = ROOT / "results" / "train_output"
-EXP = dict(name="uma_block", exp_name="siso_1_uma_block_1_ps2_p72",
-           scenario="uma", pilot_pattern="block", p_spacing=2, ue_speed=3)
+EXP = dict(name="uma_block", exp_name="siso_1_uma_block_1_ps1_p72",
+           scenario="uma", pilot_pattern="block", p_spacing=1, ue_speed=3)
 
 cfg = EnvConfig()
 cfg.scenario, cfg.pilot_pattern = EXP["scenario"], EXP["pilot_pattern"]

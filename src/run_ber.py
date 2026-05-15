@@ -9,6 +9,7 @@ import h5py
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "cebed"))
 
 from sionna.channel import ApplyOFDMChannel
@@ -35,12 +36,12 @@ for d in (BER_DIR, FIG_DIR, ABL_DIR):
 
 # 4 experiment chính
 EXPS = [
-    dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps2_p72",
-         scenario="Rayleigh", pilot_pattern="block",     p_spacing=2, ue_speed=3),
+    dict(name="rayleigh_block",     exp_name="siso_1_rayleigh_block_1_ps1_p72",
+         scenario="Rayleigh", pilot_pattern="block",     p_spacing=1, ue_speed=3),
     dict(name="rayleigh_kronecker", exp_name="siso_1_rayleigh_kronecker_1_ps1_p72",
          scenario="Rayleigh", pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
-    dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps2_p72",
-         scenario="uma",      pilot_pattern="block",     p_spacing=2, ue_speed=3),
+    dict(name="uma_block",          exp_name="siso_1_uma_block_1_ps1_p72",
+         scenario="uma",      pilot_pattern="block",     p_spacing=1, ue_speed=3),
     dict(name="uma_kronecker",      exp_name="siso_1_uma_kronecker_1_ps1_p72",
          scenario="uma",      pilot_pattern="kronecker", p_spacing=1, ue_speed=3),
 ]
@@ -100,11 +101,9 @@ def get_h_hats(env, models_dict, mask, pilots, h_b, y_b, x_b, snr):
                              env.pilot_ofdm_symbol_indices,
                              env.config.num_ofdm_symbols, env.config.fft_size)
 
-    h_ls_pilot = unflatten_last_dim(
-        tf.math.divide_no_nan(env.extract_at_pilot_locations(y_b), pilots),
-        (env.n_pilot_symbols, env.n_pilot_subcarriers))
+    h_ls_input = env.estimate_at_pilot_locations(y_b)
     pre = tf.map_fn(lambda z: preprocess_inputs(z, input_type="low", mask=mask),
-                    h_ls_pilot, fn_output_signature=tf.float32)
+                    h_ls_input, fn_output_signature=tf.float32)
 
     result = {"LS": np.squeeze(h_ls_full.numpy()),
               "LMMSE": np.squeeze(np.array(h_lmmse))}
@@ -187,7 +186,7 @@ def plot_results(res, styles, title, ber_path, nmse_path):
         plt.tight_layout()
         plt.savefig(path, dpi=150)
         plt.close()
-        print(f"  → {path.relative_to(ROOT)}")
+        print(f"  -> {path.relative_to(ROOT)}")
 
 
 # ── 4 experiment chính ────────────────────────────────────────────────────────
@@ -210,8 +209,8 @@ for e in EXPS:
 
 # ── Ablation Doppler: mismatch (speed=3) vs matched (speed=30) ────────────────
 print("\n--- Ablation Doppler (UMa block, eval speed=30) ---")
-EXP_NAME = "siso_1_uma_block_1_ps2_p72"
-env_30   = make_env("uma", "block", 2, 30)
+EXP_NAME = "siso_1_uma_block_1_ps1_p72"
+env_30   = make_env("uma", "block", 1, 30)
 models_abl = {
     "ChannelNet_mismatch": load_channelnet(env_30, "uma_block",          EXP_NAME),
     "ChannelNet_matched":  load_channelnet(env_30, "uma_block_doppler30", EXP_NAME),
